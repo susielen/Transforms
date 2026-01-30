@@ -28,8 +28,6 @@ with col1:
 with col2:
     arquivo = st.file_uploader("Arraste seu arquivo OFX aqui", type=["ofx", "pdf"])
 
-# O resto do seu código de transformar o arquivo vem aqui embaixo...
-
 import streamlit as st
 import pdfplumber
 import re
