@@ -4,20 +4,18 @@ import pdfplumber
 import re
 from datetime import datetime
 
-# Configuração da página
+# Configuração da janelinha
 st.set_page_config(page_title="Conversor Profissional OFX", page_icon="🏦")
 
-# Estilo para o botão ficar igual ao outro projeto (Verde e Grande)
+# Estilo para o botão verde, mas com tamanho automático (sem ser gigante)
 st.markdown("""
     <style>
     div.stDownloadButton > button:first-child {
         background-color: #28a745;
         color: white;
-        height: 3em;
-        width: 100%;
-        border-radius: 10px;
+        border-radius: 8px;
         border: none;
-        font-size: 20px;
+        padding: 10px 20px;
         font-weight: bold;
         transition: 0.3s;
     }
@@ -30,7 +28,7 @@ st.markdown("""
 
 st.title("🏦 Conversor de Extratos")
 
-# Lista de bancos
+# Lista de bancos (você pode adicionar mais aqui)
 lista_de_bancos = [
     "Santander", "Sicoob", "Itaú", "Banco do Brasil", "Caixa", 
     "Inter", "Mercado Pago", "Sicredi", "XP", "Nubank", 
@@ -62,23 +60,23 @@ if arquivo_pdf is not None:
         
         # Montando o arquivo OFX
         data_ofx = datetime.now().strftime('%Y%m%d')
-        ofx_body = f"""OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>"""
+        ofx_body = f"OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>"
         
         for t in transacoes:
             ofx_body += f"<STMTTRN><TRNTYPE>OTHER</TRNTYPE><DTPOSTED>{data_ofx}</DTPOSTED><TRNAMT>{t['valor']}</TRNAMT><MEMO>{t['desc'][:32]}</MEMO></STMTTRN>"
         
         ofx_body += "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"
         
-        # O Botão que agora está bonitão
+        # Botão agora em tamanho normal
         st.download_button(
-            label=f"📥 BAIXAR ARQUIVO OFX ({banco_escolhido.upper()})",
+            label=f"📥 Baixar OFX ({banco_escolhido})",
             data=ofx_body,
             file_name=f"extrato_{banco_escolhido.lower()}.ofx",
             mime="application/x-ofx"
         )
     else:
-        st.warning("Nenhuma transação identificada. Verifique se o arquivo está correto.")
+        st.warning("Nenhuma transação identificada. Verifique o arquivo.")
 
-# Seu lembrete de 5 anos
+# Nosso combinado sobre os sinais
 st.divider()
 st.caption("Regra: Para o fornecedor o crédito é positivo e o débito negativo; para o cliente o crédito é negativo e o débito positivo.")
