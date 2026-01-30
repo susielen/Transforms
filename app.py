@@ -15,8 +15,8 @@ st.markdown("""
         color: white;
         border-radius: 5px;
         border: none;
-        padding: 5px 15px; /* Tamanho reduzido */
-        font-size: 14px;   /* Letra um pouco menor */
+        padding: 5px 15px;
+        font-size: 14px;
         font-weight: 500;
         transition: 0.2s;
     }
@@ -28,6 +28,17 @@ st.markdown("""
 
 st.title("🏦 Conversor de Extratos")
 
+# --- NOVO: Manual de Ajuda ---
+with st.expander("❓ Como usar este conversor?"):
+    st.write("""
+    1. **Escolha o Banco:** Selecione o nome do seu banco na lista abaixo.
+    2. **Suba o Arquivo:** Clique em 'Suba o PDF' e escolha o arquivo do seu extrato.
+    3. **Confira:** O programa vai ler o arquivo e dizer quantos itens encontrou.
+    4. **Baixe:** Clique no botão verde para salvar o arquivo OFX no seu computador.
+    """)
+    st.info("Dica: Se o seu banco não estiver na lista, escolha a opção 'Outro'.")
+
+# Lista de bancos
 lista_de_bancos = [
     "Santander", "Sicoob", "Itaú", "Banco do Brasil", "Caixa", 
     "Inter", "Mercado Pago", "Sicredi", "XP", "Nubank", "Outro"
@@ -46,6 +57,7 @@ if arquivo_pdf is not None:
                     tem_data = re.search(r'(\d{2}/\d{2})', linha)
                     tem_valor = re.search(r'(-?\d?\.?\d+,\d{2})', linha)
                     if tem_data and tem_valor:
+                        # Limpeza do valor para o padrão OFX
                         v = tem_valor.group(1).replace('.', '').replace(',', '.')
                         d = linha.replace(tem_data.group(1), '').replace(tem_valor.group(1), '').strip()
                         transacoes.append({'valor': v, 'desc': d})
@@ -53,6 +65,7 @@ if arquivo_pdf is not None:
     if transacoes:
         st.write(f"Encontrado: {len(transacoes)} itens.")
         
+        # Gerador do conteúdo OFX
         data_ofx = datetime.now().strftime('%Y%m%d')
         ofx_body = f"OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>"
         for t in transacoes:
@@ -64,6 +77,9 @@ if arquivo_pdf is not None:
             data=ofx_body,
             file_name=f"extrato_{banco_escolhido.lower()}.ofx"
         )
+    else:
+        st.warning("Não encontrei transações. O arquivo pode ser uma imagem.")
 
 st.divider()
+# Regras personalizadas
 st.caption("Regra: Para o fornecedor o crédito é positivo e o débito negativo; para o cliente o crédito é negativo e o débito positivo.")
