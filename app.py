@@ -7,7 +7,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Central de Extratos do Gê", page_icon="🏦")
 
-# Estilo dos botões
+# Estilo visual
 st.markdown("""
     <style>
     div.stDownloadButton > button:first-child {
@@ -25,15 +25,15 @@ st.markdown("""
 st.title("🏦 Central de Extratos")
 
 tipo_robo = st.radio(
-    "Qual robô você quer usar agora?",
-    ["Robô OFX (Para Bancos)", "Robô Excel (Débito/Crédito)"],
+    "Escolha o robô:",
+    ["Robô OFX", "Robô Excel (Modelo Sistema)"],
     horizontal=True
 )
 
 lista_bancos = ["Santander", "Sicoob", "Itaú", "Banco do Brasil", "Caixa", "Inter", "Mercado Pago", "Sicredi", "XP", "Nubank", "Outro"]
-banco = st.selectbox("Selecione o Banco:", lista_bancos)
+banco = st.selectbox("Banco:", lista_bancos)
 
-arquivo_pdf = st.file_uploader("Suba o PDF aqui:", type="pdf")
+arquivo_pdf = st.file_uploader("Suba o PDF:", type="pdf")
 
 if arquivo_pdf is not None:
     transacoes = []
@@ -49,13 +49,14 @@ if arquivo_pdf is not None:
                     if tem_data and tem_valor:
                         data = tem_data.group(1)
                         valor_str = tem_valor.group(1)
-                        # Converte para número puro
                         v_num = float(valor_str.replace('.', '').replace(',', '.'))
                         desc = linha.replace(data, '').replace(valor_str, '').strip()
                         
-                        # Lógica de separação para o Excel
-                        debito = abs(v_num) if v_num < 0 else 0
-                        credito = v_num if v_num > 0 else 0
+                        # NOVA LÓGICA SOLICITADA:
+                        # Se v_num < 0 (saiu): Vai para a coluna CRÉDITO
+                        # Se v_num > 0 (entrou): Vai para a coluna DÉBITO
+                        credito = abs(v_num) if v_num < 0 else 0
+                        debito = v_num if v_num > 0 else 0
                         
                         transacoes.append({
                             "Data": data,
@@ -69,28 +70,28 @@ if arquivo_pdf is not None:
     if transacoes:
         st.success(f"Encontrei {len(transacoes)} lançamentos!")
 
-        if tipo_robo == "Robô OFX (Para Bancos)":
+        if tipo_robo == "Robô OFX":
             data_ofx = datetime.now().strftime('%Y%m%d')
             ofx = "OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>"
             for t in transacoes:
                 ofx += f"<STMTTRN><TRNTYPE>OTHER</TRNTYPE><DTPOSTED>{data_ofx}</DTPOSTED><TRNAMT>{t['Valor_Original']}</TRNAMT><MEMO>{t['Historico']}</MEMO></STMTTRN>"
             ofx += "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"
-            st.download_button("📥 Baixar Arquivo OFX", ofx, f"extrato_{banco.lower()}.ofx")
+            st.download_button("📥 Baixar OFX", ofx, f"extrato_{banco.lower()}.ofx")
 
         else:
-            # Organiza as colunas exatamente como no modelo 
+            # Planilha com colunas: Data, Historico, Documento, Debito, Credito
             df = pd.DataFrame(transacoes)[["Data", "Historico", "Documento", "Debito", "Credito"]]
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False)
             
-            st.write("### Prévia da Planilha:")
+            st.write("### Prévia do Sistema (Lógica do Banco):")
             st.dataframe(df.head())
             
-            st.download_button("📥 Baixar Excel (Débito/Crédito)", output.getvalue(), f"modelo_sistema_{banco.lower()}.xlsx")
+            st.download_button("📥 Baixar Planilha para Sistema", output.getvalue(), f"sistema_{banco.lower()}.xlsx")
     else:
-        st.error("Nenhum dado encontrado.")
+        st.error("Nenhum dado encontrado no PDF.")
 
 st.divider()
-st.caption("Regra: Débito (Saída) e Crédito (Entrada) separados em colunas.")
+st.caption("Regra Aplicada: Saída = Crédito (Banco) | Entrada = Débito (Banco)")
