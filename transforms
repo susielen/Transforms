@@ -1,0 +1,21 @@
+import pdfplumber
+import pandas as pd
+
+# 1. Abrir o PDF (o papelzinho)
+with pdfplumber.open("extrato.pdf") as pdf:
+    pagina = pdf.pages[0]
+    tabela = pagina.extract_table()
+
+# 2. Arrumar as pecinhas (Transformar em tabela)
+df = pd.DataFrame(tabela[1:], columns=tabela[0])
+
+# 3. Salvar nos três formatos (Os três cadernos)
+df.to_excel("extrato.xlsx", index=False) # Caderno de quadradinhos
+df.to_csv("extrato.txt", sep='\t', index=False) # Caderno de texto
+
+# 4. Criar o OFX (O formato especial do banco)
+# Aqui o robozinho escreve as regras do OFX para o banco entender
+with open("extrato.ofx", "w") as f:
+    f.write("DATA, VALOR, DESCRICAO\n") # Exemplo simples de início de OFX
+    for index, row in df.iterrows():
+        f.write(f"{row[0]}, {row[1]}, {row[2]}\n")
