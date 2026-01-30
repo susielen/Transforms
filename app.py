@@ -1,4 +1,36 @@
 import streamlit as st
+
+# 1. Configuração da Página (O nome que aparece na aba do navegador)
+st.set_page_config(page_title="OFX Transforms", page_icon="🏦", layout="wide")
+
+# 2. A "Tinta" do Fundo (Muda a cor da parede)
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #F0F8FF; /* Um azul clarinho bem calmo */
+    }
+    .stHeader {
+        background-color: rgba(0,0,0,0);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 3. O Título Novo
+st.title("🏦 OFX Transforms")
+st.write("Transforme seus arquivos de forma simples e rápida.")
+
+# 4. Organizando em Colunas (Para não ficar tudo espalhado)
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    banco = st.selectbox("Escolha o seu Banco:", ["Santander", "Itaú", "Bradesco", "Outros"])
+
+with col2:
+    arquivo = st.file_uploader("Arraste seu arquivo OFX aqui", type=["ofx", "pdf"])
+
+# O resto do seu código de transformar o arquivo vem aqui embaixo...
+
+import streamlit as st
 import pdfplumber
 import re
 import time
