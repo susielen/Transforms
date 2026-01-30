@@ -5,10 +5,9 @@ import re
 import io
 from datetime import datetime
 
-# Configuração da página
 st.set_page_config(page_title="Central de Extratos do Gê", page_icon="🏦")
 
-# Estilo para os botões ficarem verdes e elegantes
+# Estilo dos botões
 st.markdown("""
     <style>
     div.stDownloadButton > button:first-child {
@@ -25,14 +24,12 @@ st.markdown("""
 
 st.title("🏦 Central de Extratos")
 
-# 1. Escolha do Robô
 tipo_robo = st.radio(
     "Qual robô você quer usar agora?",
-    ["Robô OFX (Para Bancos)", "Robô Excel (Para o Sistema)"],
+    ["Robô OFX (Para Bancos)", "Robô Excel (Débito/Crédito)"],
     horizontal=True
 )
 
-# 2. Seleção do Banco
 lista_bancos = ["Santander", "Sicoob", "Itaú", "Banco do Brasil", "Caixa", "Inter", "Mercado Pago", "Sicredi", "XP", "Nubank", "Outro"]
 banco = st.selectbox("Selecione o Banco:", lista_bancos)
 
@@ -52,45 +49,48 @@ if arquivo_pdf is not None:
                     if tem_data and tem_valor:
                         data = tem_data.group(1)
                         valor_str = tem_valor.group(1)
-                        valor_num = float(valor_str.replace('.', '').replace(',', '.'))
-                        
-                        # Regra do Cliente: Inverte o sinal para o Excel
-                        valor_ajustado = valor_num * -1
+                        # Converte para número puro
+                        v_num = float(valor_str.replace('.', '').replace(',', '.'))
                         desc = linha.replace(data, '').replace(valor_str, '').strip()
+                        
+                        # Lógica de separação para o Excel
+                        debito = abs(v_num) if v_num < 0 else 0
+                        credito = v_num if v_num > 0 else 0
                         
                         transacoes.append({
                             "Data": data,
                             "Historico": desc[:50],
                             "Documento": "0",
-                            "Valor": valor_num, # Original para OFX
-                            "Valor_Ajustado": valor_ajustado # Invertido para Excel
+                            "Valor_Original": v_num,
+                            "Debito": debito,
+                            "Credito": credito
                         })
 
     if transacoes:
         st.success(f"Encontrei {len(transacoes)} lançamentos!")
 
         if tipo_robo == "Robô OFX (Para Bancos)":
-            # Lógica do Robô 1: Gerar OFX
             data_ofx = datetime.now().strftime('%Y%m%d')
             ofx = "OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>"
             for t in transacoes:
-                ofx += f"<STMTTRN><TRNTYPE>OTHER</TRNTYPE><DTPOSTED>{data_ofx}</DTPOSTED><TRNAMT>{t['Valor']}</TRNAMT><MEMO>{t['Historico']}</MEMO></STMTTRN>"
+                ofx += f"<STMTTRN><TRNTYPE>OTHER</TRNTYPE><DTPOSTED>{data_ofx}</DTPOSTED><TRNAMT>{t['Valor_Original']}</TRNAMT><MEMO>{t['Historico']}</MEMO></STMTTRN>"
             ofx += "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"
-            
             st.download_button("📥 Baixar Arquivo OFX", ofx, f"extrato_{banco.lower()}.ofx")
 
         else:
-            # Lógica do Robô 2: Gerar Excel para Sistema
-            df = pd.DataFrame(transacoes)[["Data", "Historico", "Documento", "Valor_Ajustado"]]
-            df.columns = ["Data", "Historico", "Documento", "Valor"]
+            # Organiza as colunas exatamente como no modelo 
+            df = pd.DataFrame(transacoes)[["Data", "Historico", "Documento", "Debito", "Credito"]]
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df.to_excel(writer, index=False)
             
-            st.download_button("📥 Baixar Planilha Excel", output.getvalue(), f"extrato_sistema_{banco.lower()}.xlsx")
+            st.write("### Prévia da Planilha:")
+            st.dataframe(df.head())
+            
+            st.download_button("📥 Baixar Excel (Débito/Crédito)", output.getvalue(), f"modelo_sistema_{banco.lower()}.xlsx")
     else:
-        st.error("Não encontrei dados. Verifique o arquivo.")
+        st.error("Nenhum dado encontrado.")
 
 st.divider()
-st.caption("Regra: Para o cliente o crédito é negativo e o débito positivo.")
+st.caption("Regra: Débito (Saída) e Crédito (Entrada) separados em colunas.")
