@@ -1,58 +1,42 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
-import io
+import re
 from datetime import datetime
 
-# Configuração da página (deixa o site com um nome e ícone bonitos)
-st.set_page_config(page_title="Conversor Mágico", page_icon="🏦")
+st.set_page_config(page_title="Conversor Universal OFX", page_icon="🌍")
 
-st.title("🏦 Conversor de Extratos do Gê")
-st.write("Transforme seu PDF em arquivos que o computador entende (XLSX, TXT e OFX)!")
+st.title("🌍 Conversor Universal de PDF para OFX")
+st.write("Este robozinho tenta ler extratos de qualquer banco!")
 
-# 1. Lugar para colocar o arquivo
-arquivo_pdf = st.file_uploader("Arraste seu PDF aqui", type="pdf")
+arquivo_pdf = st.file_uploader("Arraste o PDF de qualquer banco aqui", type="pdf")
 
 if arquivo_pdf is not None:
-    dados_finais = []
+    todas_as_linhas = []
     
     with pdfplumber.open(arquivo_pdf) as pdf:
         for pagina in pdf.pages:
-            # Tenta extrair como tabela primeiro
-            tabela = pagina.extract_table()
-            if tabela:
-                dados_finais.extend(tabela)
-            else:
-                # Se falhar, tenta ler o texto bruto e organizar
-                texto = pagina.extract_text()
-                if texto:
-                    linhas = texto.split('\n')
-                    for linha in linhas:
-                        dados_finais.append(linha.split())
+            # O 'extract_words' lê palavra por palavra, não importa onde elas estejam
+            palavras = pagina.extract_words()
+            
+            # Vamos agrupar as palavras que estão na mesma linha (mesmo 'top')
+            linhas_agrupadas = {}
+            for p in palavras:
+                y = p['top']
+                # Arredondamos o 'top' para agrupar palavras que estão na mesma altura
+                y_key = round(y)
+                if y_key not in linhas_agrupadas:
+                    linhas_agrupadas[y_key] = []
+                linhas_agrupadas[y_key].append(p['text'])
+            
+            for k in sorted(linhas_agrupadas.keys()):
+                todas_as_linhas.append(linhas_agrupadas[k])
 
-    if dados_finais:
-        # Criamos a nossa tabelinha (DataFrame)
-        df = pd.DataFrame(dados_finais)
+    if todas_as_linhas:
+        st.success("Consegui ler o papel! Agora vou procurar o dinheiro e as datas... 🔍")
         
-        st.success("Consegui ler o arquivo! 🎉")
-        st.write("Veja uma prévia dos dados encontrados:")
-        st.dataframe(df.head(10)) # Mostra só as 10 primeiras linhas para não travar
-
-        st.divider()
-        st.subheader("📥 Escolha como quer baixar:")
-
-        # --- PREPARAÇÃO DO EXCEL ---
-        buffer_xlsx = io.BytesIO()
-        with pd.ExcelWriter(buffer_xlsx, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, header=False)
-        st.download_button("📊 Baixar em Excel (.xlsx)", buffer_xlsx.getvalue(), "extrato_convertido.xlsx")
-
-        # --- PREPARAÇÃO DO TXT ---
-        buffer_txt = df.to_csv(index=False, sep='\t', header=False)
-        st.download_button("📄 Baixar em Texto (.txt)", buffer_txt, "extrato_convertido.txt")
-
-        # --- PREPARAÇÃO DO OFX (A língua do banco) ---
-        ofx_cabecalho = """OFXHEADER:100
+        # Cabeçalho do OFX
+        ofx_final = """OFXHEADER:100
 DATA:OFXSGML
 VERSION:102
 SECURITY:NONE
@@ -61,28 +45,40 @@ CHARSET:1252
 COMPRESSION:NONE
 OLDFILEUID:NONE
 NEWFILEUID:NONE
-<OFX>
-<BANKMSGSRSV1>
-<STMTTRNRS>
-<STMTRS>
-<CURDEF>BRL</CURDEF>
-<BANKTRANLIST>
+<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>
 """
-        corpo_ofx = ""
-        for idx, linha in df.iterrows():
-            if len(linha) >= 2: # Só adiciona se tiver pelo menos data e valor
-                corpo_ofx += f"""<STMTTRN>
+        
+        contagem = 0
+        for linha in todas_as_linhas:
+            texto_linha = " ".join(linha)
+            
+            # 🕵️ PROCURA POR DATAS (ex: 10/01 ou 10/01/2026)
+            tem_data = re.search(r'(\d{2}/\d{2}(/\d{2,4})?)', texto_linha)
+            
+            # 🕵️ PROCURA POR VALORES (ex: 1.200,50 ou 50,00)
+            # Ele busca números que tenham uma vírgula antes dos últimos dois dígitos
+            tem_valor = re.search(r'(-?\d?\.?\d+,\d{2})', texto_linha)
+
+            if tem_data and tem_valor:
+                data_limpa = datetime.now().strftime('%Y%m%d') # Usa hoje se não achar o ano
+                valor_ofx = tem_valor.group(1).replace('.', '').replace(',', '.')
+                descricao = texto_linha.replace(tem_data.group(1), '').replace(tem_valor.group(1), '').strip()
+                
+                ofx_final += f"""<STMTTRN>
 <TRNTYPE>OTHER</TRNTYPE>
-<DTPOSTED>{datetime.now().strftime('%Y%m%d')}</DTPOSTED>
-<TRNAMT>{str(linha[1]).replace(',', '.')}</TRNAMT>
-<MEMO>{str(linha[0])}</MEMO>
+<DTPOSTED>{data_hoje}</DTPOSTED>
+<TRNAMT>{valor_ofx}</TRNAMT>
+<MEMO>{descricao[:32]}</MEMO>
 </STMTTRN>
 """
-        ofx_final = ofx_cabecalho + corpo_ofx + "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"
-        
-        st.download_button("💰 Baixar para Banco (.ofx)", ofx_final, "extrato_convertido.ofx")
-        
-    else:
-        st.error("Puxa, ainda não consegui ler os dados. O PDF pode estar protegido ou ser apenas uma imagem. 😢")
+                contagem += 1
 
-st.info("Lembre-se: No seu controle, se o dinheiro entra é positivo (+), se sai é negativo (-).")
+        ofx_final += "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"
+        
+        if contagem > 0:
+            st.write(f"Encontrei **{contagem}** trocas de dinheiro!")
+            st.download_button("📥 Baixar meu arquivo OFX", ofx_final, "extrato_universal.ofx")
+        else:
+            st.warning("Li o arquivo, mas não consegui identificar o que é data e o que é valor. 🧐")
+            
+        st.info("Lembrete: Para você, o Crédito é negativo (-) e o Débito é positivo (+).")
