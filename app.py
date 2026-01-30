@@ -5,9 +5,9 @@ import time
 from datetime import datetime
 
 # Configuração da página
-st.set_page_config(page_title="Conversor OFX", page_icon="🏦")
+st.set_page_config(page_title="Conversor OFX Transformers", page_icon="🤖")
 
-# Estilo para o botão verde e ajustes visuais
+# Estilo para o botão verde e visual minimalista
 st.markdown("""
     <style>
     div.stDownloadButton > button:first-child {
@@ -18,14 +18,19 @@ st.markdown("""
         padding: 6px 16px;
         font-size: 14px;
         font-weight: 500;
+        transition: 0.3s;
+    }
+    div.stDownloadButton > button:first-child:hover {
+        background-color: #218838;
     }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏦 Conversor OFX")
+st.title("🤖 OFX Transformer")
 
+# Interface limpa
 col1, col2 = st.columns([1, 2])
 
 with col1:
@@ -38,21 +43,18 @@ with col2:
     arquivo_pdf = st.file_uploader("", type="pdf")
 
 if arquivo_pdf:
-    # --- ANIMAÇÃO COM EMOJIS PEQUENOS E RÁPIDOS ---
+    # --- ANIMAÇÃO TRANSFORMERS (RÁPIDA E PEQUENA) ---
     progresso = st.empty()
-    
-    # Sequência de transformação
-    frames = [
-        "📄📥", "📥🤖", "🤖💸", "💸🪙", "🪙📊", "📊✅"
-    ]
+    # Sequência: Papel -> Robô -> Dinheiro -> Sucesso
+    frames = ["📄", "⚙️", "🤖", "💸", "✨", "✅"]
     
     for frame in frames:
-        # H3 deixa o emoji menor que o H1 anterior
         progresso.markdown(f"<h3 style='text-align: center;'>{frame}</h3>", unsafe_allow_html=True)
-        time.sleep(0.2) # Velocidade aumentada (era 0.5)
+        time.sleep(0.15) # Mais rápido ainda para parecer uma transformação
     
     progresso.empty() 
 
+    # --- PROCESSAMENTO ---
     transacoes = []
     with pdfplumber.open(arquivo_pdf) as pdf:
         for pagina in pdf.pages:
@@ -62,15 +64,14 @@ if arquivo_pdf:
                     m_data = re.search(r'(\d{2}/\d{2})', linha)
                     m_valor = re.search(r'(-?\d?\.?\d+,\d{2})', linha)
                     if m_data and m_valor:
-                        # Formatação para o padrão OFX
                         v = m_valor.group(1).replace('.', '').replace(',', '.')
                         d = linha.replace(m_data.group(1), '').replace(m_valor.group(1), '').strip()
                         transacoes.append({'v': v, 'd': d})
 
     if transacoes:
-        st.success(f"✅ {len(transacoes)} itens convertidos!")
+        st.success(f"🤖 Transformação concluída! {len(transacoes)} itens processados.")
         
-        # Estrutura do arquivo OFX
+        # Estrutura OFX
         dt = datetime.now().strftime('%Y%m%d')
         ofx = f"OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>\n"
         for t in transacoes:
