@@ -2,12 +2,13 @@ import streamlit as st
 import pandas as pd
 import pdfplumber
 import re
+import io
 from datetime import datetime
 
 # Configuração da página
-st.set_page_config(page_title="Conversor OFX", page_icon="🏦")
+st.set_page_config(page_title="Central de Extratos do Gê", page_icon="🏦")
 
-# Estilo para o botão pequeno e elegante
+# Estilo para os botões ficarem verdes e elegantes
 st.markdown("""
     <style>
     div.stDownloadButton > button:first-child {
@@ -18,37 +19,28 @@ st.markdown("""
         padding: 5px 15px;
         font-size: 14px;
         font-weight: 500;
-        transition: 0.2s;
-    }
-    div.stDownloadButton > button:first-child:hover {
-        background-color: #218838;
     }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🏦 Conversor de Extratos")
+st.title("🏦 Central de Extratos")
 
-# --- NOVO: Manual de Ajuda ---
-with st.expander("❓ Como usar este conversor?"):
-    st.write("""
-    1. **Escolha o Banco:** Selecione o nome do seu banco na lista abaixo.
-    2. **Suba o Arquivo:** Clique em 'Suba o PDF' e escolha o arquivo do seu extrato.
-    3. **Confira:** O programa vai ler o arquivo e dizer quantos itens encontrou.
-    4. **Baixe:** Clique no botão verde para salvar o arquivo OFX no seu computador.
-    """)
-    st.info("Dica: Se o seu banco não estiver na lista, escolha a opção 'Outro'.")
+# 1. Escolha do Robô
+tipo_robo = st.radio(
+    "Qual robô você quer usar agora?",
+    ["Robô OFX (Para Bancos)", "Robô Excel (Para o Sistema)"],
+    horizontal=True
+)
 
-# Lista de bancos
-lista_de_bancos = [
-    "Santander", "Sicoob", "Itaú", "Banco do Brasil", "Caixa", 
-    "Inter", "Mercado Pago", "Sicredi", "XP", "Nubank", "Outro"
-]
+# 2. Seleção do Banco
+lista_bancos = ["Santander", "Sicoob", "Itaú", "Banco do Brasil", "Caixa", "Inter", "Mercado Pago", "Sicredi", "XP", "Nubank", "Outro"]
+banco = st.selectbox("Selecione o Banco:", lista_bancos)
 
-banco_escolhido = st.selectbox("Banco:", lista_de_bancos)
-arquivo_pdf = st.file_uploader("Suba o PDF:", type="pdf")
+arquivo_pdf = st.file_uploader("Suba o PDF aqui:", type="pdf")
 
 if arquivo_pdf is not None:
     transacoes = []
+    
     with pdfplumber.open(arquivo_pdf) as pdf:
         for pagina in pdf.pages:
             texto = pagina.extract_text()
@@ -56,30 +48,49 @@ if arquivo_pdf is not None:
                 for linha in texto.split('\n'):
                     tem_data = re.search(r'(\d{2}/\d{2})', linha)
                     tem_valor = re.search(r'(-?\d?\.?\d+,\d{2})', linha)
+                    
                     if tem_data and tem_valor:
-                        # Limpeza do valor para o padrão OFX
-                        v = tem_valor.group(1).replace('.', '').replace(',', '.')
-                        d = linha.replace(tem_data.group(1), '').replace(tem_valor.group(1), '').strip()
-                        transacoes.append({'valor': v, 'desc': d})
+                        data = tem_data.group(1)
+                        valor_str = tem_valor.group(1)
+                        valor_num = float(valor_str.replace('.', '').replace(',', '.'))
+                        
+                        # Regra do Cliente: Inverte o sinal para o Excel
+                        valor_ajustado = valor_num * -1
+                        desc = linha.replace(data, '').replace(valor_str, '').strip()
+                        
+                        transacoes.append({
+                            "Data": data,
+                            "Historico": desc[:50],
+                            "Documento": "0",
+                            "Valor": valor_num, # Original para OFX
+                            "Valor_Ajustado": valor_ajustado # Invertido para Excel
+                        })
 
     if transacoes:
-        st.write(f"Encontrado: {len(transacoes)} itens.")
-        
-        # Gerador do conteúdo OFX
-        data_ofx = datetime.now().strftime('%Y%m%d')
-        ofx_body = f"OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>"
-        for t in transacoes:
-            ofx_body += f"<STMTTRN><TRNTYPE>OTHER</TRNTYPE><DTPOSTED>{data_ofx}</DTPOSTED><TRNAMT>{t['valor']}</TRNAMT><MEMO>{t['desc'][:32]}</MEMO></STMTTRN>"
-        ofx_body += "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"
-        
-        st.download_button(
-            label="Baixar OFX",
-            data=ofx_body,
-            file_name=f"extrato_{banco_escolhido.lower()}.ofx"
-        )
+        st.success(f"Encontrei {len(transacoes)} lançamentos!")
+
+        if tipo_robo == "Robô OFX (Para Bancos)":
+            # Lógica do Robô 1: Gerar OFX
+            data_ofx = datetime.now().strftime('%Y%m%d')
+            ofx = "OFXHEADER:100\nDATA:OFXSGML\nVERSION:102\nENCODING:USASCII\nCHARSET:1252\n<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL</CURDEF><BANKTRANLIST>"
+            for t in transacoes:
+                ofx += f"<STMTTRN><TRNTYPE>OTHER</TRNTYPE><DTPOSTED>{data_ofx}</DTPOSTED><TRNAMT>{t['Valor']}</TRNAMT><MEMO>{t['Historico']}</MEMO></STMTTRN>"
+            ofx += "</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>"
+            
+            st.download_button("📥 Baixar Arquivo OFX", ofx, f"extrato_{banco.lower()}.ofx")
+
+        else:
+            # Lógica do Robô 2: Gerar Excel para Sistema
+            df = pd.DataFrame(transacoes)[["Data", "Historico", "Documento", "Valor_Ajustado"]]
+            df.columns = ["Data", "Historico", "Documento", "Valor"]
+            
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False)
+            
+            st.download_button("📥 Baixar Planilha Excel", output.getvalue(), f"extrato_sistema_{banco.lower()}.xlsx")
     else:
-        st.warning("Não encontrei transações. O arquivo pode ser uma imagem.")
+        st.error("Não encontrei dados. Verifique o arquivo.")
 
 st.divider()
-# Regras personalizadas
-st.caption("Regra: Para o fornecedor o crédito é positivo e o débito negativo; para o cliente o crédito é negativo e o débito positivo.")
+st.caption("Regra: Para o cliente o crédito é negativo e o débito positivo.")
